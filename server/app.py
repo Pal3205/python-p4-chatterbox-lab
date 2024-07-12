@@ -17,51 +17,54 @@ db.init_app(app)
 @app.route('/messages', methods=['GET', 'POST'])
 def messages():
     if request.method == 'GET':
-        messages = Message.query.order_by(Message.created_at.asc()).all()
-        messages_serialized = [m.to_dict() for m in messages]
-        return make_response(messages_serialized, 200)
+        messages = Message.query.order_by('created_at').all()
+        
+        response = make_response(
+            jsonify([message.to_dict() for message in messages]),
+            200,
+        )
+        
     elif request.method == 'POST':
-        body = request.json.get('body')
-        username = request.json.get('username')
+        data = request.get_json()
+        message = Message(
+            body=data['body'],
+            username=data['username']
+        )
 
-        if not body or not username:
-            return make_response({'error': 'Missing body or username'}, 400)
-
-        message = Message(body=body, username=username)
         db.session.add(message)
         db.session.commit()
 
-        return make_response(message.to_dict(), 201)
-    
+        response = make_response(
+            jsonify(message.to_dict()),
+            201,
+        )
+    return response
 
-@app.route('/messages/<int:id>', methods=['GET','PATCH', 'DELETE'])
+@app.route('/messages/<int:id>', methods=['PATCH', 'DELETE'])
 def messages_by_id(id):
-    message = Message.query.filter_by(id=id).first() 
-    if request.method == 'PATCH': 
+    message = Message.query.filter_by(id=id).first()
 
-        if not message:
-            return make_response({'error': 'Message not found'}, 404)
-
-        body = request.json.get('body')
-        username = request.json.get('username')
-
-        if body:
-            message.body = body
-        if username:
-            message.username = username
-
+    if request.method == 'PATCH':
+        data = request.get_json()
+        for attr in data:
+            setattr(message, attr, data[attr])
+        
+        db.session.add(message)
         db.session.commit()
 
-        return make_response(message.to_dict(), 200)
+        response = make_response(
+            jsonify(message.to_dict()),
+            200,
+        )
     elif request.method == 'DELETE':
         db.session.delete(message)
         db.session.commit()
 
-        response_body = {
-            "delete_message": True,
-            "message": "Message delted."
-        }
-        return make_response(response_body, 200)
+        response = make_response(
+            jsonify({'deleted': True}),
+            200,
+        )
+    return response
 
 if __name__ == '__main__':
     app.run(port=5555)
